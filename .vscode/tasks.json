@@ -1,0 +1,46 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch DmC Trainer UI",
+      "type": "shell",
+      "command": "C:\\Python313\\python.exe",
+      "args": ["app.py"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Launch Headless API Server",
+      "type": "shell",
+      "command": "C:\\Python313\\python.exe",
+      "args": ["app.py", "--no-browser", "--port", "54321"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Build DmC_Trainer.exe (csc.exe)",
+      "type": "shell",
+      "command": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe",
+      "args": [
+        "/nologo",
+        "/target:winexe",
+        "/optimize+",
+        "/out:DmC_Trainer.exe",
+        "launcher.cs"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Validate DMC-DevilMayCry.CT XML",
+      "type": "shell",
+      "command": "C:\\Python313\\python.exe",
+      "args": [
+        "-c",
+        "import xml.etree.ElementTree as ET; r = ET.parse('DMC-DevilMayCry.CT').getroot(); print('Entries:', len(r.findall('.//CheatEntry')))"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

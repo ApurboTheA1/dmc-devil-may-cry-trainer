@@ -1,0 +1,916 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"[ENABLE FIRST] Resolve UE3 Pointers &amp; Stats (ASLR-Safe AOB + Reflection)"</Description>
+      <Options moHideChildren="0"/>
+      <Color>0080FF</Color>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+aobscanmodule(dmc_sig_GNames,DMC-DevilMayCry.exe,8B 0D ?? ?? ?? ?? 8B 3D ?? ?? ?? ?? 83 C4 04 89 1C 85 ?? ?? ?? ?? 8B 43 08)
+aobscanmodule(dmc_sig_GObjects,DMC-DevilMayCry.exe,8B 15 ?? ?? ?? ?? 8B 0C B2 E8 ?? ?? ?? ?? A1 ?? ?? ?? ?? 46)
+aobscanmodule(dmc_sig_GEngine,DMC-DevilMayCry.exe,83 7E 20 00 74 3D 8B 0D ?? ?? ?? ?? 83 B9 5C 06 00 00 00)
+aobscanmodule(dmc_sig_StatsMap,DMC-DevilMayCry.exe,8D 4C 24 08 51 B9 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 44 24 04 83 F8 FF)
+
+{$lua}
+if syntaxcheck then return end
+
+local function u32(addr)
+  local v = readInteger(addr)
+  if not v then return 0 end
+  if v &lt; 0 then return v + 4294967296 end
+  return v
+end
+
+local pGNames   = u32(getAddress("dmc_sig_GNames") + 8)
+local pGObjects = u32(getAddress("dmc_sig_GObjects") + 2)
+local pGEngine  = u32(getAddress("dmc_sig_GEngine") + 8)
+local pStatsMap = u32(getAddress("dmc_sig_StatsMap") + 6)
+
+registerSymbol("dmc_GNames", pGNames, true)
+registerSymbol("dmc_GObjects", pGObjects, true)
+registerSymbol("dmc_GEngine", pGEngine, true)
+registerSymbol("dmc_StatsMap", pStatsMap, true)
+
+local targetStats = {
+  "Orb_Red", "Orb_Gold", "Orb_Gold_Persistent", "Orb_GoldSpecial",
+  "MundusKeyBronze", "MundusKeyBronze_Persistent",
+  "MundusKeySilver", "MundusKeySilver_Persistent",
+  "MundusKeyGold", "MundusKeyGold_Persistent",
+  "MundusKeyIvory", "MundusKeyIvory_Persistent",
+  "VitalStar_Small", "VitalStar_Small_Persistent",
+  "VitalStar_Large", "VitalStar_Large_Persistent",
+  "DevilTriggerStar_Small", "DevilTriggerStar_Small_Persistent",
+  "DevilTriggerStar_Large", "DevilTriggerStar_Large_Persistent",
+  "OrbFragment_Blue", "OrbFragment_Blue_Persistent",
+  "OrbFragment_Purple", "OrbFragment_Purple_Persistent",
+  "MAXHEALTH_PLAYER", "MAXHEALTH_SET",
+  "MAXTRIGGERPOINTS_PLAYER", "MAXTRIGGERPOINTS_SET",
+  "OTHER_GAMECOMPLETED", "OTHER_GAMECOMPLETED_HARD",
+  "OTHER_GAMECOMPLETED_SOS", "OTHER_GAMECOMPLETED_DMD",
+  "OTHER_GAMECOMPLETED_HOH"
+}
+
+local wantSet = {}
+for _, k in ipairs(targetStats) do wantSet[k] = true end
+
+local function readFName(gnamesData, gnamesNum, idx)
+  if idx &lt; 0 or idx &gt;= gnamesNum then return nil end
+  local entryPtr = u32(gnamesData + idx * 4)
+  if entryPtr &lt; 0x10000 then return nil end
+  local flags = u32(entryPtr + 8)
+  if (flags % 2) == 1 then
+    return readString(entryPtr + 16, 128, true)
+  else
+    return readString(entryPtr + 16, 128, false)
+  end
+end
+
+local lastStatsCount = -1
+dmcRegisteredStatSyms = dmcRegisteredStatSyms or {}
+
+function dmcRefreshStatsSymbols()
+  local arrData = u32(pStatsMap)
+  local arrNum  = u32(pStatsMap + 4)
+  if arrData &lt; 0x10000 or arrNum == 0 or arrNum &gt; 8000 then return end
+  if arrNum == lastStatsCount then return end
+
+  local gnData = u32(pGNames)
+  local gnNum  = u32(pGNames + 4)
+  if gnData &lt; 0x10000 or gnNum == 0 or gnNum &gt; 1000000 then return end
+
+  local nameCache = {}
+  for i = 0, arrNum - 1 do
+    local base = arrData + i * 20
+    local nidx = readInteger(base)
+    local nnum = u32(base + 4)
+    local statPtr = u32(base + 8)
+    if statPtr &gt;= 0x10000 and nnum == 0 and nidx then
+      local sname = nameCache[nidx]
+      if not sname then
+        sname = readFName(gnData, gnNum, nidx)
+        nameCache[nidx] = sname or ""
+      end
+      if wantSet[sname] then
+        local sym = "dmc_Stat_" .. sname
+        registerSymbol(sym, statPtr, true)
+        dmcRegisteredStatSyms[sym] = true
+      end
+    end
+  end
+  lastStatsCount = arrNum
+end
+
+dmcRefreshStatsSymbols()
+if dmcStatTimer then dmcStatTimer.destroy() end
+dmcStatTimer = createTimer(nil, false)
+dmcStatTimer.Interval = 1500
+dmcStatTimer.OnTimer = function() dmcRefreshStatsSymbols() end
+dmcStatTimer.Enabled = true
+{$asm}
+
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if dmcStatTimer then
+  dmcStatTimer.destroy()
+  dmcStatTimer = nil
+end
+if dmcRegisteredStatSyms then
+  for sym, _ in pairs(dmcRegisteredStatSyms) do
+    unregisterSymbol(sym)
+  end
+  dmcRegisteredStatSyms = {}
+end
+unregisterSymbol("dmc_GNames")
+unregisterSymbol("dmc_GObjects")
+unregisterSymbol("dmc_GEngine")
+unregisterSymbol("dmc_StatsMap")
+{$asm}
+</AssemblerScript>
+      <CheatEntries>
+        <CheatEntry>
+          <ID>2</ID>
+          <Description>"[Script] Never Decrease Items, Orbs &amp; Keys (Counter_Decrement AOB)"</Description>
+          <Color>FF8080</Color>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+aobscanmodule(dmc_CounterDec,DMC-DevilMayCry.exe,8B 44 24 14 50 E8 ?? ?? ?? ?? 83 C4 04 85 C0 74 0B 8B 48 0C 85 C9 74 04 49 89 48 0C)
+registersymbol(dmc_CounterDec)
+
+dmc_CounterDec+18:
+  db 90
+
+[DISABLE]
+dmc_CounterDec+18:
+  db 49
+unregistersymbol(dmc_CounterDec)
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>3</ID>
+          <Description>"[Script] One-Hit Kill (Enemies Dead in IsDead AOB, Player Safe)"</Description>
+          <Color>FF8080</Color>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>[ENABLE]
+aobscanmodule(dmc_IsDead_AOB,DMC-DevilMayCry.exe,85 C0 75 0E 0F 57 C0 0F 2F 86 40 08 00 00 73 02)
+alloc(newmem_isdead,256)
+label(code_isdead)
+label(return_isdead)
+label(player_alive)
+label(enemy_onehit)
+
+newmem_isdead:
+  push eax
+  mov eax,[dmc_GEngine]
+  test eax,eax
+  jz code_isdead
+  mov eax,[eax+4DC]
+  test eax,eax
+  jz code_isdead
+  mov eax,[eax]
+  test eax,eax
+  jz code_isdead
+  mov eax,[eax+3C]
+  test eax,eax
+  jz code_isdead
+  cmp [eax+808],esi
+  je player_alive
+
+enemy_onehit:
+  mov dword ptr [esi+840],00000000
+  jmp code_isdead
+
+player_alive:
+  comiss xmm0,[esi+840]
+  jb code_isdead
+  mov eax,[esi+844]
+  mov [esi+840],eax
+
+code_isdead:
+  pop eax
+  comiss xmm0,[esi+00000840]
+  jmp return_isdead
+
+dmc_IsDead_AOB+07:
+  jmp newmem_isdead
+  nop 2
+return_isdead:
+registersymbol(dmc_IsDead_AOB)
+
+[DISABLE]
+dmc_IsDead_AOB+07:
+  db 0F 2F 86 40 08 00 00
+unregistersymbol(dmc_IsDead_AOB)
+dealloc(newmem_isdead)
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>10</ID>
+          <Description>"=== Player ==="</Description>
+          <GroupHeader>1</GroupHeader>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>11</ID>
+              <Description>"Health"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>840</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>12</ID>
+              <Description>"Max Health"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>844</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>13</ID>
+              <Description>"God Mode (IgnoreAllDamage Bit 0 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>0</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>118</Offset>
+                <Offset>74C</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>14</ID>
+              <Description>"Devil Trigger (Current)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>84</Offset>
+                <Offset>E8C</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>15</ID>
+              <Description>"Devil Trigger (Max)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>80</Offset>
+                <Offset>E8C</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>16</ID>
+              <Description>"Infinite Devil Trigger (Cheat Bit 4)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>4</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>90</Offset>
+                <Offset>E8C</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>17</ID>
+              <Description>"DT Never Ends Out of Combat (Bit 6 = 0)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>6</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>90</Offset>
+                <Offset>E8C</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>18</ID>
+              <Description>"Overdrive / Concentration (Current)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>270</Offset>
+                <Offset>744</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>19</ID>
+              <Description>"Infinite Overdrive (Bit 2 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>2</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>27C</Offset>
+                <Offset>744</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>30</ID>
+          <Description>"=== Combat &amp; Style ==="</Description>
+          <GroupHeader>1</GroupHeader>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>31</ID>
+              <Description>"Style Rank (0=None..4=A..7=SSS)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>344</Offset>
+                <Offset>4B8</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>32</ID>
+              <Description>"Style Points (0..10000)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>340</Offset>
+                <Offset>4B8</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>33</ID>
+              <Description>"Style Decay Delay"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>348</Offset>
+                <Offset>4B8</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>34</ID>
+              <Description>"Style Points Gain Multiplier"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>80</Offset>
+                <Offset>2D4</Offset>
+                <Offset>4B8</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>35</ID>
+              <Description>"Mission Score"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>360</Offset>
+                <Offset>4B8</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>36</ID>
+              <Description>"Player Damage Multiplier (Style Damage Mult)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>1C8</Offset>
+                <Offset>744</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>37</ID>
+              <Description>"Force Dismember Kill (Bit 2 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>2</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>1CC</Offset>
+                <Offset>744</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>38</ID>
+              <Description>"Demon Evade Buff Active (Bit 1 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>1</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>27C</Offset>
+                <Offset>744</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>39</ID>
+              <Description>"Demon Evade Damage Multiplier"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>284</Offset>
+                <Offset>744</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>40</ID>
+              <Description>"Max Kablooey Darts (Default 8)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>A0</Offset>
+                <Offset>3F0</Offset>
+                <Offset>FE0</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>50</ID>
+          <Description>"=== Inventory, Orbs, Keys &amp; Stars ==="</Description>
+          <GroupHeader>1</GroupHeader>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>51</ID>
+              <Description>"Red Orbs"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_Orb_Red+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>52</ID>
+              <Description>"Gold Orbs"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_Orb_Gold+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>53</ID>
+              <Description>"Gold Orbs (Persistent)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_Orb_Gold_Persistent+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>54</ID>
+              <Description>"Copper Keys (MundusKeyBronze)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_MundusKeyBronze+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>55</ID>
+              <Description>"Argent Keys (MundusKeySilver)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_MundusKeySilver+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>56</ID>
+              <Description>"Gold Keys (MundusKeyGold)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_MundusKeyGold+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>57</ID>
+              <Description>"Ivory Keys (MundusKeyIvory)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_MundusKeyIvory+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>58</ID>
+              <Description>"Small Vital Stars"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_VitalStar_Small+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>59</ID>
+              <Description>"Large Vital Stars"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_VitalStar_Large+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>60</ID>
+              <Description>"Small Devil Trigger Stars"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_DevilTriggerStar_Small+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>61</ID>
+              <Description>"Large Devil Trigger Stars"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_DevilTriggerStar_Large+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>62</ID>
+              <Description>"Health Cross Fragments (Blue)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_OrbFragment_Blue+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>63</ID>
+              <Description>"Devil Trigger Cross Fragments (Purple)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_OrbFragment_Purple+C</Address>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>70</ID>
+          <Description>"=== Progression &amp; Upgrades ==="</Description>
+          <GroupHeader>1</GroupHeader>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>71</ID>
+              <Description>"Current XP"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>EC</Offset>
+                <Offset>7D4</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>72</ID>
+              <Description>"Unspent Upgrade Points"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>F4</Offset>
+                <Offset>7D4</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>73</ID>
+              <Description>"Total Upgrade Points Earned"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>F0</Offset>
+                <Offset>7D4</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>74</ID>
+              <Description>"Unlock All Attacks (Bit 7 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>7</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>80C</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>75</ID>
+              <Description>"Persistent Max Health Value"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_Stat_MAXHEALTH_PLAYER+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>76</ID>
+              <Description>"Persistent Max DT Value"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_Stat_MAXTRIGGERPOINTS_PLAYER+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>77</ID>
+              <Description>"Unlock Son of Sparda Difficulty (1)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_OTHER_GAMECOMPLETED+C</Address>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>78</ID>
+              <Description>"Unlock Dante Must Die Difficulty (1)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_Stat_OTHER_GAMECOMPLETED_SOS+C</Address>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>90</ID>
+          <Description>"=== Movement, World, Timers &amp; Camera ==="</Description>
+          <GroupHeader>1</GroupHeader>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>91</ID>
+              <Description>"Player Speed (CustomTimeDilation)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>8C</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>92</ID>
+              <Description>"World Speed (TimeDilation)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>5F0</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>93</ID>
+              <Description>"World Gravity Z (Default -2250)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>680</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>94</ID>
+              <Description>"Max Jump Height (Normal Mode)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>48</Offset>
+                <Offset>50</Offset>
+                <Offset>DC</Offset>
+                <Offset>FE4</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>95</ID>
+              <Description>"Max Jump Count"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>74</Offset>
+                <Offset>50</Offset>
+                <Offset>DC</Offset>
+                <Offset>FE4</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>96</ID>
+              <Description>"Mission Timer (Freeze for SSS Time)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>514</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>97</ID>
+              <Description>"Mission Damage Taken (0 for SSS)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>518</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>98</ID>
+              <Description>"Secret Mission Countdown Timer"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>8C</Offset>
+                <Offset>4EC</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>99</ID>
+              <Description>"Freeze World / Players Only (Byte +4D5 Bit 3 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>3</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>4D5</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>100</ID>
+              <Description>"Freeze Enemies AI / SuspendAI (Byte +4D5 Bit 5 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>5</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>4D5</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>101</ID>
+              <Description>"Enemies Don't Attack (Denial Bit 0 = 1)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>0</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>2AC</Offset>
+                <Offset>DB0</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>102</ID>
+              <Description>"Camera FOV Angle"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>3F8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>103</ID>
+              <Description>"Show HUD (Bit 1 = 0 to Hide)"</Description>
+              <VariableType>Binary</VariableType>
+              <BitStart>1</BitStart>
+              <BitLength>1</BitLength>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>230</Offset>
+                <Offset>424</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>104</ID>
+              <Description>"Player Draw Scale (Size)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>68</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>105</ID>
+              <Description>"Position X"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>50</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>106</ID>
+              <Description>"Position Y"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>54</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>107</ID>
+              <Description>"Position Z (Height)"</Description>
+              <VariableType>Float</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>58</Offset>
+                <Offset>808</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+      </CheatEntries>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+</CheatTable>

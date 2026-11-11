@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.tmp
+settings.json
+_tmp*
+_verify*
+_e2e*

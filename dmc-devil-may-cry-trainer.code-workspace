@@ -1,0 +1,15 @@
+{
+  "folders": [
+    {
+      "name": "DmC Devil May Cry Trainer",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "C:\\Python313\\python.exe",
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true
+    }
+  }
+}
