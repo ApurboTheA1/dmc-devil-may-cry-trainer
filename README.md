@@ -4,16 +4,15 @@ Built for **DmC: Devil May Cry (`DMC-DevilMayCry.exe` v1.0.8916.2 / Steam Win32)
 
 ## Files Included
 
-- `DmC_Trainer.exe` — Native no-console Windows launcher for the dark-themed desktop trainer UI.
-- `app.py` + `web/` — Local Flask bridge & modern responsive WeMod-style dark UI (also supports `--no-browser` and `--port`).
-- `trainer_backend.py` — Win32 process memory engine, UE3 reflection resolver, `NTGameStatsManager` TMap stat resolver, 45+ live cheats, hotkeys, presets, and 3-slot teleportation.
+- `DmC_Trainer.exe` — Native Windows WPF dark-themed desktop trainer application (compiled from `launcher.cs` + `TrainerCatalog.cs`). Communicates with `trainer_backend.py --ipc` directly over hidden stdio pipes (zero browser, zero local web server, zero external pip packages).
+- `Launch_Trainer.bat` — Batch shortcut that launches `DmC_Trainer.exe`.
+- `trainer_backend.py` — Pure Python 3 + Win32 `ctypes` memory engine, UE3 reflection resolver, `NTGameStatsManager` TMap stat resolver, 45+ live cheats, global hotkeys, presets, and 3-slot teleportation.
 - `DMC-DevilMayCry.CT` — Full **Cheat Engine 7.x** XML cheat table with auto-updating Lua UE3 reflection resolver (`GNames` / `GObjects` / `GEngine` / `StatsMap`) and standalone Auto-Assembler AOB scripts.
-- `Launch_Trainer.bat` — Alternative batch launcher.
 
 ## Quick Start
 
 1. Launch **DmC: Devil May Cry**.
-2. Double-click **`DmC_Trainer.exe`** (or run `python app.py`).
+2. Double-click **`DmC_Trainer.exe`** or **`Launch_Trainer.bat`**.
 3. Wait for the status bar in the top-left to show **`Attached · PID ... · Dante/Vergil`**.
 4. Toggle mods in the UI or via global hotkeys (click any hotkey pill in the UI to rebind; press `Home` to disable all active mods).
 

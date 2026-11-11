@@ -2,19 +2,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Trainer UI (app.py)",
+      "name": "Debug Backend Engine (--ipc)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/app.py",
-      "console": "integratedTerminal",
-      "justMyCode": true
-    },
-    {
-      "name": "Debug Headless API (--no-browser)",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/app.py",
-      "args": ["--no-browser", "--port", "54321"],
+      "program": "${workspaceFolder}/trainer_backend.py",
+      "args": ["--ipc"],
       "console": "integratedTerminal",
       "justMyCode": true
     }

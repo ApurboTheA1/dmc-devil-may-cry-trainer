@@ -4,15 +4,7 @@
     {
       "label": "Launch DmC Trainer UI",
       "type": "shell",
-      "command": "C:\\Python313\\python.exe",
-      "args": ["app.py"],
-      "problemMatcher": []
-    },
-    {
-      "label": "Launch Headless API Server",
-      "type": "shell",
-      "command": "C:\\Python313\\python.exe",
-      "args": ["app.py", "--no-browser", "--port", "54321"],
+      "command": "${workspaceFolder}\\DmC_Trainer.exe",
       "problemMatcher": []
     },
     {
@@ -23,8 +15,14 @@
         "/nologo",
         "/target:winexe",
         "/optimize+",
+        "/r:C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\WPF\\PresentationFramework.dll",
+        "/r:C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\WPF\\PresentationCore.dll",
+        "/r:C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\WPF\\WindowsBase.dll",
+        "/r:C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\System.Xaml.dll",
+        "/r:C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\System.Web.Extensions.dll",
         "/out:DmC_Trainer.exe",
-        "launcher.cs"
+        "launcher.cs",
+        "TrainerCatalog.cs"
       ],
       "group": {
         "kind": "build",
