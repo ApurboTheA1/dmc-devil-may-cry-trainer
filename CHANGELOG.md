@@ -2,6 +2,23 @@
 
 All notable changes to the **DmC: Devil May Cry Trainer & Cheat Table** project will be documented in this file.
 
+## [1.0.1] — 2026-11-14
+
+### Fixed
+- **Freeze Secret Mission Timer (Fixed Instant Mission Fail):**
+  - **Root Cause:** In Unreal Engine 3 (`DVSecretMissionManager`), `m_fCurrentTimer (+0x8C)` represents **elapsed seconds** counting UP from `0.0` towards the time deadline `m_CompletionValue (+0x58)` (e.g. 35s or 60s). The game calculates HUD seconds as `m_CompletionValue - FFloor(m_fCurrentTimer)`. Writing `99.0` caused the display timer to become negative (`35 - 99 = -64`), immediately triggering the expiration check `iNewDisplayTimer <= 0` $\rightarrow$ `SecretMissionCompleted()` $\rightarrow$ `SecretMissionLost()`!
+  - **Fix:** Redesigned `freeze_secret_timer` to lock elapsed seconds `m_fCurrentTimer` at `0.0` and preserve the HUD countdown display timer at the mission limit (`m_CompletionValue`), preventing the time expiration check from ever evaluating to true.
+  - Added safety guard checking `m_bTrackingGoals` / `m_bSecretMissionLevel` (+0x44) and `m_bCountingUp` to ensure timers are only modified when a countdown challenge is actively running.
+
+- **Freeze Mission & Escape Timers (`DVSeqAct_Timer` Support):**
+  - In addition to locking post-mission elapsed time `m_fCurrentMissionTime (+0x514)` at `0.0` for guaranteed SSS Time ranking, `freeze_mission_timer` now dynamically detects and pauses active level sequence countdown timers (`DVSeqAct_Timer` at `+0x0108` bit 4 `m_Paused`) such as the Mission 6 collapsing tunnel escape and Mission 13 dance club rounds.
+  - Added safe restoration of `m_Paused` when toggled off or when `disable_all` (`Home`) is pressed.
+
+- **Cheat Engine Table Updates (`DMC-DevilMayCry.CT`):**
+  - Renamed offset `8C` to `"Secret Mission Elapsed Time (Freeze at 0.0 for Infinite Time)"` to avoid confusion with countdown seconds.
+  - Added offset `88` `"Secret Mission HUD Display Countdown (Seconds Remaining)"` (4 Bytes).
+  - Added `"[Toggle] Infinite Secret Mission Time (Never Expire)"` Lua timer script.
+
 ## [1.0.0] — 2026-11-14
 
 ### Initial Release

@@ -135,8 +135,13 @@ OFF_STYLE_RANK = 0x0344
 OFF_STYLE_DECAY_DELAY = 0x0348
 OFF_STYLE_MISSION_SCORE = 0x0360
 OFF_STYLEPARAM_GLOBAL_MULT = 0x0080
+OFF_SM_FLAGS = 0x0044
+OFF_SM_COMPLETION_TYPE = 0x0054
+OFF_SM_COMPLETION_VALUE = 0x0058
 OFF_SM_DISPLAY_TIMER = 0x0088
 OFF_SM_TIMER = 0x008C
+OFF_SEQACT_FLAGS = 0x0108
+OFF_SEQACT_TIME = 0x0110
 OFF_PROFILE_XP = 0x00EC
 OFF_PROFILE_POINTS_TOTAL = 0x00F0
 OFF_PROFILE_POINTS_UNSPENT = 0x00F4
@@ -330,6 +335,10 @@ class DmCTrainerEngine:
 
         self._was_fast_kill = False
         self._was_jump_mod = False
+        self._cls_seqact_timer = None
+        self._seqact_timers = []
+        self._last_seqact_scan = 0.0
+        self._was_seqact_paused = False
         self._last_attach_attempt = 0.0
         self.prev_keys = set()
         self.last_event = ""
@@ -443,6 +452,10 @@ class DmCTrainerEngine:
         self.orig_detonator_max_darts = None
         self._was_fast_kill = False
         self._was_jump_mod = False
+        self._cls_seqact_timer = None
+        self._seqact_timers = []
+        self._last_seqact_scan = 0.0
+        self._was_seqact_paused = False
         self.telemetry = self._empty_telemetry()
 
     def _try_attach(self) -> bool:
@@ -636,6 +649,56 @@ class DmCTrainerEngine:
                 objs.append(j)
         return objs
 
+    def _pause_seqact_timers(self, enable: bool):
+        if not self.handle:
+            return
+        now = time.monotonic()
+        if self._cls_seqact_timer is None and (now - self._last_seqact_scan > 3.0):
+            self._last_seqact_scan = now
+            gobj = self.addrs.get("GObjects")
+            if gobj:
+                hdr = self.rpm(gobj, 12)
+                if hdr:
+                    arr, num, _ = struct.unpack("<III", hdr)
+                    raw = self.rpm(arr, min(num, 160000) * 4)
+                    if raw:
+                        ptrs = struct.unpack(f"<{len(raw)//4}I", raw)
+                        for p in ptrs:
+                            if p and p > 0x10000:
+                                nidx = self.r_i32(p + OFF_UOBJECT_NAME)
+                                if nidx is not None and self.get_name(nidx) == "DVSeqAct_Timer":
+                                    c_ptr = self.r_u32(p + OFF_UOBJECT_CLASS)
+                                    if c_ptr and self.get_name(self.r_i32(c_ptr + OFF_UOBJECT_NAME) or -1) == "Class":
+                                        self._cls_seqact_timer = p
+                                        break
+
+        if not self._cls_seqact_timer:
+            return
+
+        if now - self._last_seqact_scan > 2.0:
+            self._last_seqact_scan = now
+            gobj = self.addrs.get("GObjects")
+            if gobj:
+                hdr = self.rpm(gobj, 12)
+                if hdr:
+                    arr, num, _ = struct.unpack("<III", hdr)
+                    raw = self.rpm(arr, min(num, 160000) * 4)
+                    if raw:
+                        ptrs = struct.unpack(f"<{len(raw)//4}I", raw)
+                        cls_target = self._cls_seqact_timer
+                        self._seqact_timers = [p for p in ptrs if p and p > 0x10000 and self.r_u32(p + OFF_UOBJECT_CLASS) == cls_target]
+
+        for timer_ptr in self._seqact_timers:
+            flags = self.r_u32(timer_ptr + OFF_SEQACT_FLAGS) or 0
+            if enable:
+                if (flags & 0x08) and not (flags & 0x10):
+                    self.set_bits(timer_ptr + OFF_SEQACT_FLAGS, 0x10, 0)
+                self._was_seqact_paused = True
+            else:
+                if flags & 0x10:
+                    self.set_bits(timer_ptr + OFF_SEQACT_FLAGS, 0, 0x10)
+                self._was_seqact_paused = False
+
     # --- Core Loop Tick ---
     def _tick(self):
         with self.lock:
@@ -773,9 +836,26 @@ class DmCTrainerEngine:
                     if toggles.get("freeze_mission_timer"):
                         self.w_f32(gi + OFF_GI_MISSION_TIME, 0.0)
 
+                # Active level sequence countdown timers (DVSeqAct_Timer in Mission 6, 13, 16, etc.)
+                if toggles.get("freeze_mission_timer"):
+                    self._pause_seqact_timers(True)
+                elif self._was_seqact_paused:
+                    self._pause_seqact_timers(False)
+
                 if sm and toggles.get("freeze_secret_timer"):
-                    self.w_f32(sm + OFF_SM_TIMER, 99.0)
-                    self.w_i32(sm + OFF_SM_DISPLAY_TIMER, 99)
+                    flags44 = self.r_u32(sm + OFF_SM_FLAGS) or 0
+                    is_tracking = bool(flags44 & 0x04)
+                    is_secret_level = bool(flags44 & 0x01)
+                    if is_tracking or is_secret_level:
+                        is_counting_up = bool(flags44 & 0x10)
+                        comp_val = self.r_i32(sm + OFF_SM_COMPLETION_VALUE) or 0
+                        if not is_counting_up:
+                            # Countdown mission: m_fCurrentTimer is elapsed seconds.
+                            # Lock to 0.0 so time never advances towards deadline:
+                            self.w_f32(sm + OFF_SM_TIMER, 0.0)
+                            # Keep display timer showing full limit time:
+                            disp = max(comp_val, 30) if comp_val > 0 else 60
+                            self.w_i32(sm + OFF_SM_DISPLAY_TIMER, disp)
 
                 if is_dante:
                     gp = self.r_u32(pawn + OFF_PAWN_DANTE_GAMEPLAY_PARAMS)
@@ -947,6 +1027,8 @@ class DmCTrainerEngine:
             for k, v in list(self.config["toggles"].items()):
                 if v:
                     self.set_toggle(k, False)
+            if self._was_seqact_paused:
+                self._pause_seqact_timers(False)
             self.last_event = "All cheats disabled"
 
     def perform_action(self, action: str, payload=None) -> dict:

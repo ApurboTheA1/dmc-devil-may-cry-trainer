@@ -180,8 +180,8 @@ namespace DmCTrainerApp
             // 5. World & AI
             var world = new CategorySpec { Id = "world", Title = "World & AI", Icon = "W" };
             world.Actions.Add(Act("Reset Mission Timer & Damage", "reset_mission_timer", null, false));
-            world.Items.Add(Mod("freeze_mission_timer", "Freeze Mission Timer", "Freezes mission elapsed time for S/SSS speed bonus", null));
-            world.Items.Add(Mod("freeze_secret_timer", "Freeze Secret Mission Timer", "Holds Secret Mission countdown clock", null));
+            world.Items.Add(Mod("freeze_mission_timer", "Freeze Mission & Level Timers", "Locks mission elapsed time (SSS rank) & pauses level countdown timers", null));
+            world.Items.Add(Mod("freeze_secret_timer", "Freeze Secret Mission Timer", "Freezes Secret Mission countdown timer at max (never expires)", null));
             world.Items.Add(Mod("freeze_enemies_ai", "Freeze Enemies AI", "Sets bSuspendAI flag in WorldInfo", null));
             world.Items.Add(Mod("enemies_dont_attack", "Enemies Don't Attack (No Tokens)", "Clears attack tokens & cooldowns on AICoordinator", null));
             world.Items.Add(Mod("freeze_world", "Freeze World (Players Only)", "Sets bPlayersOnly - freezes everything except player", null));

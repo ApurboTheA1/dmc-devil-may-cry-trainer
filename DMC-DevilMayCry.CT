@@ -769,7 +769,7 @@ dealloc(newmem_isdead)
             </CheatEntry>
             <CheatEntry>
               <ID>98</ID>
-              <Description>"Secret Mission Countdown Timer"</Description>
+              <Description>"Secret Mission Elapsed Time (Freeze at 0.0 for Infinite Time)"</Description>
               <VariableType>Float</VariableType>
               <Address>dmc_GEngine</Address>
               <Offsets>
@@ -781,6 +781,55 @@ dealloc(newmem_isdead)
                 <Offset>0</Offset>
                 <Offset>4DC</Offset>
               </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>981</ID>
+              <Description>"Secret Mission HUD Display Countdown (Seconds Remaining)"</Description>
+              <VariableType>4 Bytes</VariableType>
+              <Address>dmc_GEngine</Address>
+              <Offsets>
+                <Offset>88</Offset>
+                <Offset>4EC</Offset>
+                <Offset>678</Offset>
+                <Offset>D8</Offset>
+                <Offset>3C</Offset>
+                <Offset>0</Offset>
+                <Offset>4DC</Offset>
+              </Offsets>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>982</ID>
+              <Description>"[Toggle] Infinite Secret Mission Time (Never Expire)"</Description>
+              <Options moHideChildren="1"/>
+              <VariableType>Auto Assembler Script</VariableType>
+              <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+if dmcSecretTimer then dmcSecretTimer.destroy() end
+dmcSecretTimer = createTimer(nil, false)
+dmcSecretTimer.Interval = 100
+dmcSecretTimer.OnTimer = function()
+  local sm = dmc_SecretMgr
+  if sm and sm ~= 0 then
+    local flags = readInteger(sm + 0x44) or 0
+    local isCountingUp = (bAnd(flags, 0x10) ~= 0)
+    if not isCountingUp then
+      writeFloat(sm + 0x8C, 0.0)
+      local comp = readInteger(sm + 0x58) or 0
+      local disp = math.max(comp, 60)
+      writeInteger(sm + 0x88, disp)
+    end
+  end
+end
+dmcSecretTimer.Enabled = true
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+if dmcSecretTimer then
+  dmcSecretTimer.destroy()
+  dmcSecretTimer = nil
+end
+              </AssemblerScript>
             </CheatEntry>
             <CheatEntry>
               <ID>99</ID>
