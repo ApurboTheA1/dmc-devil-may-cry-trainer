@@ -49,7 +49,7 @@ Built using ASLR-safe **dynamic AOB scanning** and live **Unreal Engine 3 reflec
 - **Drop Active Enemies to 1 HP:** Set all live hostile pawns in the current encounter to 1 HP.
 
 ### 3. Inventory, Keys & Economy
-- **Never Decrease Items & Orbs:** Byte-safe opcode patch preventing inventory consumption (with conflict detection if another trainer is hooked).
+- **Never Decrease Items & Orbs:** Byte-safe opcode patch preventing inventory consumption.
 - **Infinite Keys:** Unlimited Copper, Argent, Gold, and Ivory Keys.
 - **Infinite Consumables:** Unlimited Small/Large Vital Stars, Small/Large DT Stars, and Gold Orbs.
 - **Stat Upgrades:** Health Cross Fragments, DT Cross Fragments, and Upgrade Points.
@@ -130,7 +130,7 @@ Built using ASLR-safe **dynamic AOB scanning** and live **Unreal Engine 3 reflec
 ## Troubleshooting
 
 - **Trainer shows "Waiting for game...":** Make sure `DMC-DevilMayCry.exe` is running. If you run the game or Steam as Administrator, run the trainer as Administrator as well so Windows permissions allow memory access.
-- **AOB Match Failure / Hook Conflict:** If you run another trainer (such as FLiNG) simultaneously, our memory engine automatically detects foreign hooks at the opcode site and safely yields native patching to prevent crashes.
+- **AOB Match Verification:** The memory engine automatically validates instruction integrity at the opcode site before applying memory patches to ensure safe execution.
 - **Hotkeys not responding:** Ensure the trainer is running. The global hook listens for keys via Win32 `GetAsyncKeyState`. You can click any hotkey badge in the UI to assign a different key.
 
 ---
