@@ -5,3 +5,4 @@ settings.json
 _tmp*
 _verify*
 _e2e*
+*.zip
